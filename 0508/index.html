@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W² Studio — Architecture Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Noto+Serif+SC:wght@300;400&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --warm-white: #F9F7F2;
+  --charcoal: #1A1A1A;
+  --muted: #6B6B6B;
+  --light-gray: #D4D0C8;
+  --accent: #8B7355;
+  --grain-opacity: 0.04;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-snap-type: y mandatory;
+  overflow-y: scroll;
+}
+
+body {
+  font-family: 'Inter', 'Noto Serif SC', sans-serif;
+  background: var(--warm-white);
+  color: var(--charcoal);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* Grain texture overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===================== MONOGRAM LOGO ===================== */
+.monogram-container {
+  position: fixed;
+  top: 32px;
+  left: 32px;
+  z-index: 1000;
+  width: 48px;
+  height: 48px;
+  cursor: pointer;
+}
+
+.monogram-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.monogram-svg line {
+  stroke: var(--charcoal);
+  stroke-width: 1.2;
+  fill: none;
+  opacity: 0.3;
+  transition: opacity 0.4s ease;
+}
+
+.monogram-container:hover .monogram-svg line {
+  opacity: 1;
+}
+
+/* Growth animation — sides are 40 units, diagonal is ~56.6 units */
+.monogram-svg .line-top,
+.monogram-svg .line-bottom,
+.monogram-svg .line-left,
+.monogram-svg .line-right {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+}
+
+.monogram-svg .line-diag {
+  stroke-dasharray: 57;
+  stroke-dashoffset: 57;
+}
+
+.monogram-grown .line-top    { animation: growLine40 0.6s 0.2s ease forwards; }
+.monogram-grown .line-right  { animation: growLine40 0.6s 0.35s ease forwards; }
+.monogram-grown .line-bottom { animation: growLine40 0.6s 0.5s ease forwards; }
+.monogram-grown .line-left   { animation: growLine40 0.6s 0.65s ease forwards; }
+.monogram-grown .line-diag   { animation: growLine57 0.5s 0.9s ease forwards; }
+
+@keyframes growLine40 {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes growLine57 {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Navigation overlay */
+.nav-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(249, 247, 242, 0.97);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+}
+
+.nav-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.nav-links {
+  list-style: none;
+  text-align: center;
+}
+
+.nav-links li {
+  margin: 24px 0;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.4s ease;
+}
+
+.nav-overlay.active .nav-links li {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.nav-overlay.active .nav-links li:nth-child(1) { transition-delay: 0.1s; }
+.nav-overlay.active .nav-links li:nth-child(2) { transition-delay: 0.2s; }
+.nav-overlay.active .nav-links li:nth-child(3) { transition-delay: 0.3s; }
+.nav-overlay.active .nav-links li:nth-child(4) { transition-delay: 0.4s; }
+
+.nav-links a {
+  font-size: 2rem;
+  font-weight: 300;
+  color: var(--charcoal);
+  text-decoration: none;
+  letter-spacing: 0.08em;
+  transition: color 0.3s;
+  cursor: pointer;
+}
+
+.nav-links a:hover { color: var(--accent); }
+
+/* ===================== SECTIONS ===================== */
+section {
+  min-height: 100vh;
+  scroll-snap-align: start;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===================== HERO ===================== */
+.hero {
+  flex-direction: column;
+  text-align: center;
+  padding: 0 24px;
+}
+
+.hero-logo {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 48px;
+  opacity: 0;
+  animation: fadeIn 1.2s 1.4s ease forwards;
+}
+
+.hero-logo svg {
+  width: 100%;
+  height: 100%;
+}
+
+.hero-logo svg rect,
+.hero-logo svg line {
+  stroke: var(--charcoal);
+  stroke-width: 0.8;
+  fill: none;
+}
+
+.hero-title {
+  font-size: clamp(2.5rem, 6vw, 5rem);
+  font-weight: 300;
+  letter-spacing: 0.15em;
+  margin-bottom: 16px;
+  opacity: 0;
+  animation: fadeIn 1s 1.8s ease forwards;
+}
+
+.hero-subtitle {
+  font-size: clamp(0.9rem, 1.5vw, 1.1rem);
+  font-weight: 300;
+  color: var(--muted);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0;
+  animation: fadeIn 1s 2.2s ease forwards;
+}
+
+.hero-line {
+  width: 1px;
+  height: 80px;
+  background: var(--light-gray);
+  margin-top: 48px;
+  opacity: 0;
+  animation: fadeIn 1s 2.6s ease forwards;
+}
+
+.hero-scroll-hint {
+  position: absolute;
+  bottom: 40px;
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+  opacity: 0;
+  animation: fadeIn 1s 3s ease forwards, float 3s 3.5s ease-in-out infinite;
+}
+
+@keyframes fadeIn {
+  to { opacity: 1; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(8px); }
+}
+
+/* ===================== PROJECT SECTIONS ===================== */
+.project-section {
+  flex-direction: column;
+  padding: 80px 48px;
+  overflow: hidden;
+}
+
+.project-layers {
+  position: relative;
+  width: 100%;
+  max-width: 1200px;
+  aspect-ratio: 16/9;
+  max-height: 70vh;
+}
+
+/* Layer 1: Grid */
+.layer-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1s ease;
+}
+
+.layer-grid.visible { opacity: 1; }
+
+.layer-grid svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Layer 2: Technical info (typewriter) */
+.layer-info {
+  position: absolute;
+  bottom: 32px;
+  left: 32px;
+  z-index: 2;
+  font-size: 0.8rem;
+  font-weight: 300;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.layer-info .typewriter-line {
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  border-right: 1px solid var(--muted);
+}
+
+.layer-info .typewriter-line.active {
+  opacity: 1;
+  animation: typing 1.5s steps(30) forwards, blink 0.8s step-end infinite;
+}
+
+.layer-info .typewriter-line.done {
+  opacity: 1;
+  border-right: none;
+}
+
+@keyframes typing {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+@keyframes blink {
+  50% { border-color: transparent; }
+}
+
+/* Layer 3: Image */
+.layer-image {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+  overflow: hidden;
+}
+
+.layer-image.visible { opacity: 1; }
+
+.layer-image .project-render {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Placeholder renders using CSS gradients */
+.render-planning {
+  background:
+    linear-gradient(135deg, rgba(139,115,85,0.15) 0%, transparent 50%),
+    linear-gradient(225deg, rgba(100,100,100,0.1) 0%, transparent 50%),
+    repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(0,0,0,0.03) 40px, rgba(0,0,0,0.03) 41px),
+    repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(0,0,0,0.03) 40px, rgba(0,0,0,0.03) 41px),
+    linear-gradient(180deg, #E8E4DC 0%, #D4CFC5 100%);
+}
+
+.render-architecture {
+  background:
+    linear-gradient(180deg, rgba(200,190,175,0.6) 0%, rgba(180,170,155,0.3) 40%, transparent 40%),
+    linear-gradient(90deg, transparent 30%, rgba(160,150,135,0.2) 30%, rgba(160,150,135,0.2) 32%, transparent 32%),
+    linear-gradient(90deg, transparent 60%, rgba(160,150,135,0.2) 60%, rgba(160,150,135,0.2) 62%, transparent 62%),
+    linear-gradient(0deg, rgba(120,110,95,0.15) 0%, transparent 60%),
+    linear-gradient(180deg, #DDD8CE 0%, #C8C2B8 100%);
+}
+
+.render-landscape {
+  background:
+    radial-gradient(ellipse at 30% 70%, rgba(120,140,100,0.25) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 60%, rgba(100,130,90,0.2) 0%, transparent 40%),
+    linear-gradient(0deg, rgba(140,160,120,0.15) 0%, transparent 30%),
+    linear-gradient(180deg, #D8D4C8 0%, #C5C0B5 100%);
+}
+
+.render-interior {
+  background:
+    linear-gradient(135deg, rgba(200,185,160,0.4) 0%, transparent 60%),
+    linear-gradient(45deg, transparent 40%, rgba(220,210,195,0.3) 40%, rgba(220,210,195,0.3) 60%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(255,250,240,0.5) 0%, transparent 40%),
+    linear-gradient(180deg, #E0DBD0 0%, #D0C8BC 100%);
+}
+
+/* Project title overlay */
+.project-title-overlay {
+  position: absolute;
+  top: 32px;
+  right: 32px;
+  z-index: 4;
+  text-align: right;
+}
+
+.project-title-overlay h2 {
+  font-size: clamp(1.5rem, 3vw, 2.5rem);
+  font-weight: 300;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.project-title-overlay .project-type {
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ===================== ABOUT ===================== */
+.about {
+  flex-direction: column;
+  padding: 80px 48px;
+  text-align: center;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.about-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 40px;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.8s ease;
+}
+
+.about.visible .about-label {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.about-philosophy {
+  font-size: clamp(1.2rem, 2.5vw, 1.8rem);
+  font-weight: 300;
+  line-height: 1.8;
+  margin-bottom: 64px;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.8s 0.2s ease;
+}
+
+.about.visible .about-philosophy {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.founders {
+  display: flex;
+  gap: 80px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.founder {
+  text-align: center;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.8s ease;
+}
+
+.about.visible .founder:nth-child(1) { transition-delay: 0.4s; opacity: 1; transform: translateY(0); }
+.about.visible .founder:nth-child(2) { transition-delay: 0.6s; opacity: 1; transform: translateY(0); }
+
+.founder-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  margin: 0 auto 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 300;
+  color: var(--muted);
+  border: 1px solid var(--light-gray);
+}
+
+.founder-name {
+  font-size: 1.1rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.founder-role {
+  font-size: 0.8rem;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+}
+
+/* ===================== CONTACT ===================== */
+.contact {
+  flex-direction: column;
+  padding: 80px 48px;
+  max-width: 600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.contact-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 40px;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.8s ease;
+}
+
+.contact.visible .contact-label {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.contact-form {
+  width: 100%;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.8s 0.2s ease;
+}
+
+.contact.visible .contact-form {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.form-group {
+  margin-bottom: 32px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--light-gray);
+  padding: 12px 0;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 300;
+  color: var(--charcoal);
+  outline: none;
+  transition: border-color 0.3s;
+  cursor: pointer;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  border-bottom-color: var(--charcoal);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: var(--light-gray);
+}
+
+.submit-btn {
+  display: inline-block;
+  padding: 14px 48px;
+  border: 1px solid var(--charcoal);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.85rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--charcoal);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.submit-btn:hover {
+  background: var(--charcoal);
+  color: var(--warm-white);
+}
+
+.contact-info {
+  margin-top: 64px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 2;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.8s 0.4s ease;
+}
+
+.contact.visible .contact-info {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ===================== FOOTER ===================== */
+.footer {
+  padding: 32px 48px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  border-top: 1px solid rgba(0,0,0,0.06);
+}
+
+/* ===================== RESPONSIVE ===================== */
+@media (max-width: 768px) {
+  .monogram-container {
+    top: 20px;
+    left: 20px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .project-section {
+    padding: 60px 24px;
+  }
+
+  .project-layers {
+    aspect-ratio: 4/3;
+    max-height: 60vh;
+  }
+
+  .layer-info {
+    bottom: 16px;
+    left: 16px;
+    font-size: 0.7rem;
+  }
+
+  .project-title-overlay {
+    top: 16px;
+    right: 16px;
+  }
+
+  .about, .contact {
+    padding: 60px 24px;
+  }
+
+  .founders {
+    gap: 48px;
+  }
+
+  .nav-links a {
+    font-size: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-title {
+    letter-spacing: 0.08em;
+  }
+
+  .founders {
+    flex-direction: column;
+    gap: 40px;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== MONOGRAM NAV ==================== -->
+<div class="monogram-container" id="monogram" role="button" aria-label="Navigation menu" tabindex="0">
+  <svg class="monogram-svg" viewBox="0 0 48 48">
+    <line class="line-top" x1="4" y1="4" x2="44" y2="4" />
+    <line class="line-right" x1="44" y1="4" x2="44" y2="44" />
+    <line class="line-bottom" x1="44" y1="44" x2="4" y2="44" />
+    <line class="line-left" x1="4" y1="44" x2="4" y2="4" />
+    <line class="line-diag" x1="4" y1="44" x2="44" y2="4" />
+  </svg>
+</div>
+
+<!-- Nav overlay -->
+<nav class="nav-overlay" id="navOverlay">
+  <ul class="nav-links">
+    <li><a href="#hero" onclick="closeNav()">首页</a></li>
+    <li><a href="#works" onclick="closeNav()">作品</a></li>
+    <li><a href="#about" onclick="closeNav()">关于</a></li>
+    <li><a href="#contact" onclick="closeNav()">联系</a></li>
+  </ul>
+</nav>
+
+<!-- ==================== HERO ==================== -->
+<section class="hero" id="hero">
+  <div class="hero-logo">
+    <svg viewBox="0 0 120 120">
+      <rect x="10" y="10" width="100" height="100" stroke-width="1" />
+      <line x1="10" y1="110" x2="110" y2="10" stroke-width="1" />
+    </svg>
+  </div>
+  <h1 class="hero-title">W² Studio</h1>
+  <p class="hero-subtitle">Architecture &middot; Interior &middot; Landscape &middot; Planning</p>
+  <div class="hero-line"></div>
+  <span class="hero-scroll-hint">向下滚动 &middot; Scroll</span>
+</section>
+
+<!-- ==================== WORKS ==================== -->
+<section class="project-section" id="works" data-project="0">
+  <div class="project-layers">
+    <div class="layer-grid">
+      <svg viewBox="0 0 1200 675" preserveAspectRatio="xMidYMid slice">
+        <defs>
+          <pattern id="grid0" width="60" height="60" patternUnits="userSpaceOnUse">
+            <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(0,0,0,0.06)" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid0)"/>
+      </svg>
+    </div>
+    <div class="layer-image">
+      <div class="project-render render-planning"></div>
+    </div>
+    <div class="layer-info">
+      <div class="typewriter-line">城市新区总体概念规划</div>
+      <div class="typewriter-line">Urban New District Masterplan · 2024</div>
+      <div class="typewriter-line">规划面积: 12.8 km² | 容积率: 2.4</div>
+    </div>
+    <div class="project-title-overlay">
+      <h2>城南新区</h2>
+      <span class="project-type">规划 Planning</span>
+    </div>
+  </div>
+</section>
+
+<section class="project-section" data-project="1">
+  <div class="project-layers">
+    <div class="layer-grid">
+      <svg viewBox="0 0 1200 675" preserveAspectRatio="xMidYMid slice">
+        <defs>
+          <pattern id="grid1" width="60" height="60" patternUnits="userSpaceOnUse">
+            <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(0,0,0,0.06)" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid1)"/>
+        <rect x="300" y="150" width="300" height="400" fill="none" stroke="rgba(0,0,0,0.04)" stroke-width="0.5"/>
+        <rect x="650" y="200" width="250" height="350" fill="none" stroke="rgba(0,0,0,0.04)" stroke-width="0.5"/>
+      </svg>
+    </div>
+    <div class="layer-image">
+      <div class="project-render render-architecture"></div>
+    </div>
+    <div class="layer-info">
+      <div class="typewriter-line">城市文化艺术中心</div>
+      <div class="typewriter-line">Cultural Arts Center · 2024</div>
+      <div class="typewriter-line">建筑面积: 18,500 m² | 层数: 5F</div>
+    </div>
+    <div class="project-title-overlay">
+      <h2>叠院</h2>
+      <span class="project-type">建筑 Architecture</span>
+    </div>
+  </div>
+</section>
+
+<section class="project-section" data-project="2">
+  <div class="project-layers">
+    <div class="layer-grid">
+      <svg viewBox="0 0 1200 675" preserveAspectRatio="xMidYMid slice">
+        <defs>
+          <pattern id="grid2" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0,0,0,0.05)" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid2)"/>
+        <circle cx="600" cy="340" r="200" fill="none" stroke="rgba(0,0,0,0.04)" stroke-width="0.5"/>
+        <circle cx="600" cy="340" r="150" fill="none" stroke="rgba(0,0,0,0.03)" stroke-width="0.5"/>
+      </svg>
+    </div>
+    <div class="layer-image">
+      <div class="project-render render-landscape"></div>
+    </div>
+    <div class="layer-info">
+      <div class="typewriter-line">滨水生态景观带</div>
+      <div class="typewriter-line">Waterfront Eco-Park · 2023</div>
+      <div class="typewriter-line">景观面积: 45,000 m² | 长度: 2.8 km</div>
+    </div>
+    <div class="project-title-overlay">
+      <h2>水岸</h2>
+      <span class="project-type">景观 Landscape</span>
+    </div>
+  </div>
+</section>
+
+<section class="project-section" data-project="3">
+  <div class="project-layers">
+    <div class="layer-grid">
+      <svg viewBox="0 0 1200 675" preserveAspectRatio="xMidYMid slice">
+        <defs>
+          <pattern id="grid3" width="30" height="30" patternUnits="userSpaceOnUse">
+            <path d="M 30 0 L 0 0 0 30" fill="none" stroke="rgba(0,0,0,0.04)" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid3)"/>
+        <line x1="400" y1="100" x2="400" y2="575" stroke="rgba(0,0,0,0.03)" stroke-width="0.5"/>
+        <line x1="800" y1="100" x2="800" y2="575" stroke="rgba(0,0,0,0.03)" stroke-width="0.5"/>
+      </svg>
+    </div>
+    <div class="layer-image">
+      <div class="project-render render-interior"></div>
+    </div>
+    <div class="layer-info">
+      <div class="typewriter-line">私宅室内改造设计</div>
+      <div class="typewriter-line">Private Residence Renovation · 2023</div>
+      <div class="typewriter-line">室内面积: 320 m² | 材质: 木 · 石 · 铜</div>
+    </div>
+    <div class="project-title-overlay">
+      <h2>隐庐</h2>
+      <span class="project-type">室内 Interior</span>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== ABOUT ==================== -->
+<section class="about" id="about">
+  <span class="about-label">关于工作室</span>
+  <p class="about-philosophy">
+    W² Studio 由两位王姓女性建筑师共同创立。<br>
+    我们相信，每一个空间都是一次对话——<br>
+    场域与介入之间的平衡，是我们处理设计的核心方法。<br>
+    从城市规划到室内细节，尺度在变，态度不变。
+  </p>
+  <div class="founders">
+    <div class="founder">
+      <div class="founder-avatar">W</div>
+      <div class="founder-name">王 &middot; 主创建筑师</div>
+      <div class="founder-role">Principal Architect</div>
+    </div>
+    <div class="founder">
+      <div class="founder-avatar">W</div>
+      <div class="founder-name">王 &middot; 主创建筑师</div>
+      <div class="founder-role">Principal Architect</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== CONTACT ==================== -->
+<section class="contact" id="contact">
+  <span class="contact-label">联系我们</span>
+  <form class="contact-form" onsubmit="handleSubmit(event)">
+    <div class="form-group">
+      <label for="name">姓名</label>
+      <input type="text" id="name" name="name" placeholder="您的姓名" required>
+    </div>
+    <div class="form-group">
+      <label for="email">邮箱</label>
+      <input type="email" id="email" name="email" placeholder="your@email.com" required>
+    </div>
+    <div class="form-group">
+      <label for="project-type">项目类型</label>
+      <input type="text" id="project-type" name="project-type" placeholder="规划 / 建筑 / 景观 / 室内">
+    </div>
+    <div class="form-group">
+      <label for="message">项目简述</label>
+      <textarea id="message" name="message" placeholder="请简要描述您的项目需求..."></textarea>
+    </div>
+    <button type="submit" class="submit-btn">发送</button>
+  </form>
+  <div class="contact-info">
+    <p>contact@w2studio.com</p>
+    <p>中国 &middot; Shanghai</p>
+  </div>
+</section>
+
+<!-- ==================== FOOTER ==================== -->
+<footer class="footer">
+  &copy; 2024 W² Studio. All Rights Reserved.
+</footer>
+
+<script>
+// ===================== MONOGRAM ANIMATION =====================
+document.addEventListener('DOMContentLoaded', () => {
+  const monogram = document.getElementById('monogram');
+
+  // Start growth animation
+  setTimeout(() => {
+    monogram.classList.add('monogram-grown');
+  }, 300);
+
+  // Nav toggle
+  monogram.addEventListener('click', toggleNav);
+  monogram.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleNav();
+    }
+  });
+});
+
+function toggleNav() {
+  const overlay = document.getElementById('navOverlay');
+  overlay.classList.toggle('active');
+}
+
+function closeNav() {
+  document.getElementById('navOverlay').classList.remove('active');
+}
+
+// Close nav on Escape
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeNav();
+});
+
+// ===================== SCROLL ANIMATIONS =====================
+const observerOptions = {
+  threshold: 0.3,
+  rootMargin: '0px'
+};
+
+// Project layer animations
+const projectObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const section = entry.target;
+      const grid = section.querySelector('.layer-grid');
+      const image = section.querySelector('.layer-image');
+      const lines = section.querySelectorAll('.typewriter-line');
+
+      // Layer 1: Grid appears
+      setTimeout(() => {
+        if (grid) grid.classList.add('visible');
+      }, 200);
+
+      // Layer 2: Typewriter effect
+      setTimeout(() => {
+        lines.forEach((line, i) => {
+          setTimeout(() => {
+            line.classList.add('active');
+            // Remove cursor after typing
+            setTimeout(() => {
+              line.classList.remove('active');
+              line.classList.add('done');
+            }, 1600);
+          }, i * 1800);
+        });
+      }, 800);
+
+      // Layer 3: Image fades in
+      setTimeout(() => {
+        if (image) image.classList.add('visible');
+      }, 2000);
+    }
+  });
+}, observerOptions);
+
+document.querySelectorAll('.project-section').forEach(section => {
+  projectObserver.observe(section);
+});
+
+// About / Contact fade-in
+const fadeObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.2 });
+
+document.querySelectorAll('.about, .contact').forEach(el => {
+  fadeObserver.observe(el);
+});
+
+// ===================== FORM HANDLER =====================
+function handleSubmit(e) {
+  e.preventDefault();
+  const btn = e.target.querySelector('.submit-btn');
+  btn.textContent = '已发送';
+  btn.style.background = 'var(--charcoal)';
+  btn.style.color = 'var(--warm-white)';
+  setTimeout(() => {
+    btn.textContent = '发送';
+    btn.style.background = 'transparent';
+    btn.style.color = 'var(--charcoal)';
+    e.target.reset();
+  }, 2000);
+}
+</script>
+</body>
+</html>
